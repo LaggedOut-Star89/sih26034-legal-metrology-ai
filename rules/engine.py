@@ -338,46 +338,6 @@ def evaluate_font_height_applicability(fields):
         "REVIEW",
         f"Unknown quantity unit: {unit}"
     )
-#change1->
-
-def _rule7_threshold_mm(net_quantity, is_blown_molded=False):
-    """Return the Rule 7(2) Table-I minimum numeral height in mm.
-
-    Bands:
-        <= 200 g/ml  -> 1 mm  (2 mm if blown/molded/embossed/perforated)
-        > 200-500    -> 2 mm  (4 mm)
-        > 500        -> 4 mm  (6 mm)
-    Returns None when the rule does not apply (count units) or quantity
-    is unavailable.
-    """
-    if not isinstance(net_quantity, dict):
-        return None
-    try:
-        qty = float(net_quantity.get("value") or 0)
-    except (TypeError, ValueError):
-        return None
-
-    unit = str(net_quantity.get("unit", "")).upper()
-
-    # Normalise to base units for comparison
-    if unit == "KG":
-        qty = qty * 1000
-        unit = "G"
-    elif unit == "L":
-        qty = qty * 1000
-        unit = "ML"
-
-    if unit not in {"G", "ML"}:
-        return None  # count / length units: Rule 7(2) Table-I does not apply
-
-    if qty <= 200:
-        return 2.0 if is_blown_molded else 1.0
-    elif qty <= 500:
-        return 4.0 if is_blown_molded else 2.0
-    else:
-        return 6.0 if is_blown_molded else 4.0
-
-
 
 def evaluate_rule(rule, fields):
     field_name = rule["field_name"]
@@ -454,51 +414,13 @@ def evaluate_rule(rule, fields):
         }
     elif field_name == "net_quantity_font_height":
 
-        net_qty = fields.get("net_quantity")
-        glyph = fields.get("net_quantity_font_height_measurement")
-        is_blown = bool(fields.get("is_blown_molded_package", False))
-
-        if isinstance(glyph, dict) and glyph.get("status") == "OK":
-            height_mm = glyph.get("estimated_numeral_height_mm")
-            threshold = _rule7_threshold_mm(net_qty, is_blown)
-            confidence = float(glyph.get("confidence") or 0.0)
-
-            if height_mm is None or threshold is None:
-                status = "REVIEW"
-                reason = "Measurement present but threshold could not be determined"
-            elif confidence < 0.65:
-                status = "REVIEW"
-                reason = (
-                    f"Measurement confidence {confidence:.2f} is too low; "
-                    "human review required"
-                )
-            elif height_mm >= threshold:
-                status = "PASS"
-                reason = (
-                    f"Numeral height {height_mm:.2f} mm >= {threshold} mm "
-                    "minimum (Rule 7(2), Table-I)"
-                )
-            else:
-                status = "FAIL"
-                reason = (
-                    f"Numeral height {height_mm:.2f} mm < {threshold} mm "
-                    "minimum (Rule 7(2), Table-I)"
-                )
-
-            return {
-                "status": status,
-                "reason": reason,
-                "value": glyph,
-            }
-
-        # No measurement result available — fall back to the old REVIEW path
         status, reason = evaluate_font_height_applicability(fields)
-        return {
-            "status": status,
-            "reason": reason,
-            "value": net_qty,
-        }
 
+        return {
+        "status": status,
+        "reason": reason,
+        "value": fields.get("net_quantity")
+        }
     elif field_name == "mrp_netqty_contrast":
         status, reason = validate_mrp_netqty_contrast(value)
     else:
